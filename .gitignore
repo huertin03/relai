@@ -1,0 +1,24 @@
+# Binarios compilados
+/relai
+/relai.exe
+/dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Tests y cobertura
+*.test
+*.out
+coverage.*
+
+# Go workspace
+go.work
+go.work.sum
+
+# Estado local — nunca debe subirse: puede contener datos de cuentas
+*.local.yml
+/testdata/local/
+
+# macOS
+.DS_Store
