@@ -72,3 +72,52 @@ func TestRecentSalidaVaciaNoEsError(t *testing.T) {
 		t.Fatalf("esperaba 0, obtuve %d", len(ss))
 	}
 }
+
+func TestRecentDescartaLineaVacia(t *testing.T) {
+	// Línea válida, línea vacía, línea válida
+	payload := []byte(`{"id":"aaa","source":"claude","repo":"r1","summary":"s1","updatedAt":"2026-07-27T09:30:00Z"}
+
+{"id":"bbb","source":"claude","repo":"r2","summary":"s2","updatedAt":"2026-07-27T09:30:00Z"}`)
+	l := NewLister(fakeRunner(payload, nil))
+	ss, err := l.Recent(context.Background(), 5)
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if len(ss) != 2 {
+		t.Fatalf("esperaba 2 sesiones (línea vacía descartada), obtuve %d", len(ss))
+	}
+}
+
+func TestRecentDescartaJSONValidoConIDVacio(t *testing.T) {
+	// Línea válida, línea con ID vacío, línea válida
+	payload := []byte(`{"id":"aaa","source":"claude","repo":"r1","summary":"s1","updatedAt":"2026-07-27T09:30:00Z"}
+{"id":"","source":"claude","repo":"r2","summary":"s2","updatedAt":"2026-07-27T09:30:00Z"}
+{"id":"bbb","source":"claude","repo":"r3","summary":"s3","updatedAt":"2026-07-27T09:30:00Z"}`)
+	l := NewLister(fakeRunner(payload, nil))
+	ss, err := l.Recent(context.Background(), 5)
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if len(ss) != 2 {
+		t.Fatalf("esperaba 2 sesiones (ID vacío descartado), obtuve %d", len(ss))
+	}
+}
+
+func TestRecentIgnoraUpdatedAtMalformado(t *testing.T) {
+	// Línea con UpdatedAt malformado
+	payload := []byte(`{"id":"ccc","source":"claude","repo":"r","summary":"s","updatedAt":"invalid-date"}`)
+	l := NewLister(fakeRunner(payload, nil))
+	ss, err := l.Recent(context.Background(), 5)
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if len(ss) != 1 {
+		t.Fatalf("esperaba 1 sesión (UpdatedAt malformado ignora pero no falla), obtuve %d", len(ss))
+	}
+	if ss[0].ID != "ccc" {
+		t.Errorf("ID inesperado: %q", ss[0].ID)
+	}
+	if !ss[0].UpdatedAt.IsZero() {
+		t.Error("UpdatedAt malformado debe quedar en zero")
+	}
+}
