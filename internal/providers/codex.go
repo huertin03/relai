@@ -73,13 +73,13 @@ func (p CodexProvider) spawn(ctx context.Context) (io.ReadCloser, io.WriteCloser
 	if err := cmd.Start(); err != nil {
 		return nil, nil, nil, err
 	}
-	cierre := func() error {
+	closer := func() error {
 		_ = stdin.Close()
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 		return nil
 	}
-	return stdout, stdin, cierre, nil
+	return stdout, stdin, closer, nil
 }
 
 func (p CodexProvider) Usage(ctx context.Context) ([]Account, error) {
@@ -87,39 +87,39 @@ func (p CodexProvider) Usage(ctx context.Context) ([]Account, error) {
 	if transport == nil {
 		transport = p.spawn // se liga aquí, con el Bin vigente en este momento
 	}
-	stdout, stdin, cierre, err := transport(ctx)
+	stdout, stdin, closer, err := transport(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = cierre() }()
+	defer func() { _ = closer() }()
 
 	// El protocolo NO lleva campo `jsonrpc`. Verificado en vivo. El envío de
 	// las tres peticiones de corrido (sin esperar la respuesta de initialize
 	// antes de escribir initialized) es deliberado: la captura en vivo se hizo
 	// así y el servidor respondió correctamente; el protocolo es asíncrono y
 	// las respuestas se casan por `id`, no por orden de llegada. No "arreglar".
-	peticiones := []string{
+	requests := []string{
 		`{"id":1,"method":"initialize","params":{"clientInfo":{"name":"relai","version":"0.1.0"}}}`,
 		`{"method":"initialized","params":null}`,
 		`{"id":2,"method":"account/rateLimits/read","params":null}`,
 	}
-	for _, req := range peticiones {
+	for _, req := range requests {
 		if _, err := io.WriteString(stdin, req+"\n"); err != nil {
 			return nil, fmt.Errorf("codex: no se pudo escribir la petición: %w", err)
 		}
 	}
 
-	rl, err := leerRespuesta(stdout, 2)
+	rl, err := readResponse(stdout, 2)
 	if err != nil {
 		return nil, err
 	}
 	return []Account{toCodexAccount(rl)}, nil
 }
 
-// leerRespuesta lee líneas hasta encontrar la que casa con wantID. El
+// readResponse lee líneas hasta encontrar la que casa con wantID. El
 // app-server intercala notificaciones no solicitadas, así que asumir
 // "la siguiente línea es mi respuesta" falla de forma intermitente.
-func leerRespuesta(r io.Reader, wantID int64) (*codexRateLimits, error) {
+func readResponse(r io.Reader, wantID int64) (*codexRateLimits, error) {
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	for sc.Scan() {

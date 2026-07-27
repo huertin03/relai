@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 )
 
 // guionTransport simula el app-server: responde a initialize y, cuando ve la
@@ -80,6 +81,28 @@ func TestCodexIgnoraNotificacionesIntrusas(t *testing.T) {
 	}
 }
 
+func TestCodexAmbasVentanasNulasEsFetchFailed(t *testing.T) {
+	// La regla global "nunca 0% para un fallo" depende de esta rama: si
+	// primary y secondary vienen ambos null, no queda ninguna ventana que
+	// enseñar, así que la cuenta debe marcarse como fallo y no como 0%.
+	linea := `{"id":2,"result":{"rateLimits":{"planType":"free","primary":null,"secondary":null}}}`
+	p := CodexProvider{Transport: guionTransport(t, linea)}
+	accs, err := p.Usage(context.Background())
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	a := accs[0]
+	if a.Status != StatusFetchFailed {
+		t.Errorf("esperaba StatusFetchFailed, obtuve %v", a.Status)
+	}
+	if len(a.Windows) != 0 {
+		t.Errorf("esperaba 0 ventanas, obtuve %d", len(a.Windows))
+	}
+	if a.ShowsPct() {
+		t.Error("StatusFetchFailed nunca debe mostrar porcentaje")
+	}
+}
+
 func TestKindFromMinutes(t *testing.T) {
 	// 1440 → "1d", no "24h": la regla de días va primero a propósito porque
 	// "1d" se lee mejor que "24h" en un menú.
@@ -98,9 +121,16 @@ func TestCodexBinSeLeeEnLaLlamadaNoEnLaConstruccion(t *testing.T) {
 	// cfg.Binaries.Codex`) vería su override ignorado en silencio, siempre
 	// usando "codex" del PATH. El Bin debe leerse en el momento de la
 	// llamada a Usage.
+	// Plazo obligatorio: si esta corrección regresionara y el código volviera
+	// a lanzar el spawn real, un contexto sin plazo dejaría el test colgado
+	// (lanzaría de verdad `codex app-server`) en vez de fallar. Un test
+	// colgado bloquea el CI sin decir por qué; uno que falla, no.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
 	p := NewCodexProvider()
 	p.Bin = "relai-codex-inexistente"
-	_, err := p.Usage(context.Background())
+	_, err := p.Usage(ctx)
 	if !errors.Is(err, ErrBinaryMissing) {
 		t.Fatalf("esperaba ErrBinaryMissing, obtuve %v", err)
 	}
