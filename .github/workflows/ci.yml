@@ -19,13 +19,30 @@ jobs:
       - run: go test ./... -race
 
   cross:
-    runs-on: ubuntu-latest
+    # Cada plataforma se compila en su runner nativo. fyne.io/systray necesita
+    # cgo para su backend Cocoa en darwin, y cruzar a darwin desde un host
+    # linux desactiva cgo por defecto — eso dejaba este job en rojo desde el
+    # primer push. windows/amd64 y linux/amd64 sí cruzan bien con cgo
+    # desactivado (syscalls y dbus puro Go respectivamente), así que se
+    # compilan ambos desde ubuntu-latest.
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+            cgo: "0"
+          - os: ubuntu-latest
+            goos: windows
+            goarch: amd64
+            cgo: "0"
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.26'
-      - run: |
-          GOOS=darwin  GOARCH=arm64 go build -o /dev/null .
-          GOOS=windows GOARCH=amd64 go build -o /dev/null .
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /dev/null .
+      - run: GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=${{ matrix.cgo || '1' }} go build -o /dev/null .

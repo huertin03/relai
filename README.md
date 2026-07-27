@@ -31,13 +31,15 @@ The full design, including verified schemas for all three, is in
 
 ## Platforms
 
-Go 1.26 + [`fyne.io/systray`](https://github.com/fyne-io/systray). Cross-compilation verified from macOS arm64 with no extra toolchain:
+Go 1.26 + [`fyne.io/systray`](https://github.com/fyne-io/systray). Sizes below are the actual built binaries, measured 2026-07-27 after `beeep` (native notifications) was wired in — expect these numbers, not the smaller ones from an early empty-prototype build:
 
 | Target | Binary |
 |---|---|
-| darwin/arm64 | 3.8 MB |
-| windows/amd64 | 4.1 MB |
-| linux/amd64 | 6.1 MB |
+| darwin/arm64 | 5.8 MB |
+| windows/amd64 | 8.5 MB |
+| linux/amd64 | 7.5 MB |
+
+CI builds each target on its native runner (`.github/workflows/ci.yml`): darwin/arm64 on `macos-latest`, windows/amd64 and linux/amd64 cross-compiled from `ubuntu-latest`. `fyne.io/systray` needs cgo for its Cocoa backend on darwin, and cross-compiling to darwin from a non-macOS host disables cgo by default, so darwin cannot be cross-built from Linux — that's why it gets its own runner instead of joining the other two. `make cross` locally only produces a valid darwin binary when run on a Mac (see the comment above the `cross` target in the `Makefile`).
 
 Linux additionally needs a StatusNotifierItem host (appindicator or equivalent) at runtime, or the icon will not appear.
 

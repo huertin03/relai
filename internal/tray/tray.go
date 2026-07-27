@@ -151,9 +151,18 @@ func (a *app) rebuild() {
 		sub.Disable()
 	}
 	for _, s := range ss {
+		// s.ID no tiene longitud mínima garantizada (solo se descarta si está
+		// vacío): truncar a ciegas con [:8] podía reventar el arranque del
+		// menú con un ID corto y sin resumen.
 		label := s.Summary
 		if label == "" {
-			label = s.ID[:8]
+			label = s.ID
+			if len(label) > 8 {
+				label = label[:8]
+			}
+		}
+		if label == "" {
+			label = "(sesión sin título)"
 		}
 		entry := handoff.AddSubMenuItem(label, s.Repo)
 		for _, target := range a.cfg.Handoff.Targets {
