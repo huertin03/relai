@@ -14,10 +14,10 @@ import (
 type Status int
 
 const (
-	StatusOK Status = iota
-	StatusTokenExpired        // el token caducó mientras lo tenía Claude Code
-	StatusAPIKey              // cuenta de API key: no tiene cuota de suscripción
-	StatusKeychainUnavailable // Keychain ilegible
+	StatusOK                  Status = iota
+	StatusTokenExpired               // el token caducó mientras lo tenía Claude Code
+	StatusAPIKey                     // cuenta de API key: no tiene cuota de suscripción
+	StatusKeychainUnavailable        // Keychain ilegible
 	StatusNoCredentials
 	StatusFetchFailed // la medición falló o el contrato no se reconoce
 )
@@ -44,8 +44,8 @@ func (s Status) String() string {
 // Window es una ventana de cuota. Pct es SIEMPRE consumido (0-100), nunca
 // restante: todo el display asume "más alto = peor".
 type Window struct {
-	Kind     string    // "5h" | "7d" | "30d" | "spend" | "scoped" | genérico
-	Name     string    // solo para "scoped": el modelo. Vacío en el resto.
+	Kind     string // "5h" | "7d" | "30d" | "spend" | "scoped" | genérico
+	Name     string // solo para "scoped": el modelo. Vacío en el resto.
 	Pct      int
 	ResetsAt time.Time // cero si el proveedor no la da
 }
