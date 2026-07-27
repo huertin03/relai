@@ -4,7 +4,7 @@ One tray icon for every AI coding plan you pay for.
 
 Relai shows how much of each provider's rate-limit window you have burned — Claude and Codex today — lets you switch Claude accounts, and hands a live coding session off to another tool when a plan runs dry.
 
-> **Status: design only.** The spec is written and every external interface it depends on has been verified against real output. No implementation yet.
+> **Status: working.** Tray icon, quota for Claude and Codex, account switching and session handoff all implemented and tested.
 
 ## Why
 
@@ -44,3 +44,13 @@ Linux additionally needs a StatusNotifierItem host (appindicator or equivalent) 
 ## Prior art
 
 Relai is deliberately duplicative. [`cswap menubar`](https://github.com/realiti4/claude-swap) already gives you a macOS menu bar for Claude accounts, and [CodexBar](https://github.com/steipete/CodexBar) already shows quota across 63+ providers and is far more mature. If you only need one of those halves, use them — they are better at their own job. Relai exists for the case where you want quota, account switching, and session handoff behind a single icon, on all three desktop platforms.
+
+## Install
+
+```bash
+git clone https://github.com/huertin03/relai
+cd relai
+make build && ./relai
+```
+
+Requires [`claude-swap`](https://github.com/realiti4/claude-swap) for Claude quota and switching, and [`continues`](https://github.com/yigitkonur/cli-continues) for handoff. Both are optional: Relai degrades to a disabled menu entry when a tool is missing rather than failing.
