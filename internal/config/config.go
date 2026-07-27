@@ -65,12 +65,12 @@ func Load(path string) (Config, error) {
 	if err := yaml.Unmarshal(b, &c); err != nil {
 		return Default(), fmt.Errorf("config: YAML inválido en %s: %w", path, err)
 	}
-	return sanear(c), nil
+	return sanitize(c), nil
 }
 
-// sanear recorta valores imposibles en vez de rechazar el fichero entero:
+// sanitize recorta valores imposibles en vez de rechazar el fichero entero:
 // un umbral mal puesto no debe dejar al usuario sin bandeja.
-func sanear(c Config) Config {
+func sanitize(c Config) Config {
 	if c.AlertThreshold > 100 {
 		c.AlertThreshold = 100
 	}

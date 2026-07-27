@@ -78,7 +78,7 @@ func TestUmbralFueraDeRangoSeCorrige(t *testing.T) {
 	}
 }
 
-// Tests para las otras tres correcciones de sanear que no estaban cubiertas.
+// Tests para las otras tres correcciones de sanitize que no estaban cubiertas.
 
 func TestUmbralNegativoSeCorrigeA0(t *testing.T) {
 	dir := t.TempDir()
