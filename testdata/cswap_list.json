@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "activeAccountNumber": 1,
+  "accounts": [
+    {
+      "number": 1,
+      "email": "uno@example.com",
+      "organizationName": "Acme",
+      "organizationUuid": "org-uuid-1",
+      "isOrganization": true,
+      "active": true,
+      "usageStatus": "ok",
+      "usage": {
+        "fiveHour": { "pct": 78, "resetsAt": 1787749472, "countdown": "2h14", "clock": "18:30" },
+        "sevenDay": { "pct": 41, "resetsAt": 1788049472, "expectedPct": 38.2, "aheadOfPace": true },
+        "spend": { "used": 12.5, "limit": 50.0, "pct": 25, "currency": "USD" },
+        "scoped": [ { "name": "opus", "pct": 62, "resetsAt": 1788049472 } ]
+      },
+      "alias": "work",
+      "usageFetchedAt": "2026-07-27T09:00:00Z",
+      "usageAgeSeconds": 42.0
+    },
+    {
+      "number": 2,
+      "email": "dos@example.com",
+      "organizationName": "",
+      "organizationUuid": "",
+      "isOrganization": false,
+      "active": false,
+      "usageStatus": "token_expired",
+      "usage": null,
+      "disabled": true
+    }
+  ]
+}
