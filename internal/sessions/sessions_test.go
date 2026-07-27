@@ -25,7 +25,7 @@ func TestRecentParseaElFixture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error inesperado: %v", err)
 	}
-	// La tercera línea está corrupta y debe descartarse sin romper el resto.
+	// Líneas 3 y 4 están corruptas (sintaxis inválida y tipo equivocado) y deben descartarse.
 	if len(ss) != 2 {
 		t.Fatalf("esperaba 2 sesiones válidas, obtuve %d", len(ss))
 	}
@@ -119,5 +119,59 @@ func TestRecentIgnoraUpdatedAtMalformado(t *testing.T) {
 	}
 	if !ss[0].UpdatedAt.IsZero() {
 		t.Error("UpdatedAt malformado debe quedar en zero")
+	}
+}
+
+func TestRecentDescartaJSONTipoEquivocado(t *testing.T) {
+	// JSON sintácticamente válido pero con updatedAt como número (tipo equivocado).
+	// Sin la rama de error del json.Unmarshal, raw quedaría con ID populado y se colaría.
+	payload := []byte(`{"id":"bad-type","source":"claude","repo":"malformed","summary":"tipo equivocado","updatedAt":1234567890}`)
+	l := NewLister(fakeRunner(payload, nil))
+	ss, err := l.Recent(context.Background(), 5)
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if len(ss) != 0 {
+		t.Fatalf("esperaba 0 sesiones (tipo equivocado descartado), obtuve %d", len(ss))
+	}
+}
+
+func TestRecentInvocaContinuesConArgumentosCorrectos(t *testing.T) {
+	// Captura name y args para verificar que Recent invoca realmente el comando correcto.
+	var capturedName string
+	var capturedArgs []string
+	runner := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		capturedName = name
+		capturedArgs = args
+		return []byte(""), nil
+	}
+	l := NewLister(runner)
+	l.Recent(context.Background(), 5)
+	if capturedName != "continues" {
+		t.Errorf("esperaba binary 'continues', obtuve %q", capturedName)
+	}
+	expectedArgs := []string{"list", "--source", "claude", "--jsonl"}
+	if len(capturedArgs) != len(expectedArgs) {
+		t.Fatalf("esperaba %d args, obtuve %d: %v", len(expectedArgs), len(capturedArgs), capturedArgs)
+	}
+	for i, expected := range expectedArgs {
+		if capturedArgs[i] != expected {
+			t.Errorf("arg[%d]: esperaba %q, obtuve %q", i, expected, capturedArgs[i])
+		}
+	}
+}
+
+func TestRecentUsaBinSobrescrito(t *testing.T) {
+	// Verifica que Lister.Bin se usa cuando se sobrescribe.
+	var capturedName string
+	runner := func(ctx context.Context, name string, args ...string) ([]byte, error) {
+		capturedName = name
+		return []byte(""), nil
+	}
+	l := NewLister(runner)
+	l.Bin = "custom-continues"
+	l.Recent(context.Background(), 5)
+	if capturedName != "custom-continues" {
+		t.Errorf("esperaba binary 'custom-continues', obtuve %q", capturedName)
 	}
 }
