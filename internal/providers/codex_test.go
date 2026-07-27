@@ -3,6 +3,7 @@ package providers
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -87,6 +88,24 @@ func TestKindFromMinutes(t *testing.T) {
 		if got := kindFromMinutes(mins); got != esperado {
 			t.Errorf("kindFromMinutes(%d) = %q, esperaba %q", mins, got, esperado)
 		}
+	}
+}
+
+func TestCodexBinSeLeeEnLaLlamadaNoEnLaConstruccion(t *testing.T) {
+	// NewCodexProvider no debe ligar Transport a un Bin congelado en el
+	// instante de construir: si lo hiciera, un consumidor que reasigne Bin
+	// después (como hace el cableado de configuración: `codex.Bin =
+	// cfg.Binaries.Codex`) vería su override ignorado en silencio, siempre
+	// usando "codex" del PATH. El Bin debe leerse en el momento de la
+	// llamada a Usage.
+	p := NewCodexProvider()
+	p.Bin = "relai-codex-inexistente"
+	_, err := p.Usage(context.Background())
+	if !errors.Is(err, ErrBinaryMissing) {
+		t.Fatalf("esperaba ErrBinaryMissing, obtuve %v", err)
+	}
+	if !strings.Contains(err.Error(), "relai-codex-inexistente") {
+		t.Errorf("el error debe mencionar el binario buscado (%q), obtuve %v", "relai-codex-inexistente", err)
 	}
 }
 

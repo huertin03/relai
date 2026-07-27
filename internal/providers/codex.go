@@ -41,10 +41,13 @@ type CodexProvider struct {
 	Bin       string
 }
 
+// NewCodexProvider deja Transport a nil a propósito: si lo ligáramos aquí a
+// p.spawn, el method value capturaría una copia de p con el Bin de este
+// instante, y un `codex.Bin = "otro"` posterior (como hace el cableado de
+// configuración) se ignoraría en silencio. Se liga en Usage, en el momento
+// de la llamada, para leer el Bin vigente.
 func NewCodexProvider() CodexProvider {
-	p := CodexProvider{Bin: "codex"}
-	p.Transport = p.spawn
-	return p
+	return CodexProvider{Bin: "codex"}
 }
 
 func (p CodexProvider) Name() string { return "codex" }
@@ -80,13 +83,21 @@ func (p CodexProvider) spawn(ctx context.Context) (io.ReadCloser, io.WriteCloser
 }
 
 func (p CodexProvider) Usage(ctx context.Context) ([]Account, error) {
-	stdout, stdin, cierre, err := p.Transport(ctx)
+	transport := p.Transport
+	if transport == nil {
+		transport = p.spawn // se liga aquí, con el Bin vigente en este momento
+	}
+	stdout, stdin, cierre, err := transport(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = cierre() }()
 
-	// El protocolo NO lleva campo `jsonrpc`. Verificado en vivo.
+	// El protocolo NO lleva campo `jsonrpc`. Verificado en vivo. El envío de
+	// las tres peticiones de corrido (sin esperar la respuesta de initialize
+	// antes de escribir initialized) es deliberado: la captura en vivo se hizo
+	// así y el servidor respondió correctamente; el protocolo es asíncrono y
+	// las respuestas se casan por `id`, no por orden de llegada. No "arreglar".
 	peticiones := []string{
 		`{"id":1,"method":"initialize","params":{"clientInfo":{"name":"relai","version":"0.1.0"}}}`,
 		`{"method":"initialized","params":null}`,
