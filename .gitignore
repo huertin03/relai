@@ -22,3 +22,6 @@ go.work.sum
 
 # macOS
 .DS_Store
+
+# Scratch de orquestación (ledger, briefs, informes de revisión)
+.superpowers/
