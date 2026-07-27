@@ -90,3 +90,27 @@ func TestTargetAvailableComprueba(t *testing.T) {
 		t.Error("opencode no debería estar disponible")
 	}
 }
+
+func TestHandoffParametrosVaciosEsError(t *testing.T) {
+	e := &espia{}
+	a := NewActor(e.runner())
+	if err := a.Handoff(context.Background(), "", "codex"); err == nil {
+		t.Error("una sesión vacía debe rechazarse")
+	}
+	if e.nombre != "" {
+		t.Errorf("no debió invocarse ningún comando, se invocó %q", e.nombre)
+	}
+	if err := a.Handoff(context.Background(), "abc123", ""); err == nil {
+		t.Error("un destino vacío debe rechazarse")
+	}
+	if e.nombre != "" {
+		t.Errorf("no debió invocarse ningún comando, se invocó %q", e.nombre)
+	}
+}
+
+func TestTargetAvailableConLookNilUsaFallback(t *testing.T) {
+	var a Actor // zero-value: Look es nil
+	if !a.TargetAvailable("go") {
+		t.Error("con Look nil debe caer a exec.LookPath, y `go` está en PATH")
+	}
+}
