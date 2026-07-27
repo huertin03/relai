@@ -29,8 +29,8 @@ func TestClaudeParseaElFixtureReal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error inesperado: %v", err)
 	}
-	if len(accs) != 2 {
-		t.Fatalf("esperaba 2 cuentas, obtuve %d", len(accs))
+	if len(accs) != 3 {
+		t.Fatalf("esperaba 3 cuentas, obtuve %d", len(accs))
 	}
 
 	a := accs[0]
@@ -108,5 +108,20 @@ func TestClaudeJSONTruncadoEsError(t *testing.T) {
 	p := NewClaudeProvider(fakeRunner([]byte(`{"schemaVersion":1,"acc`), nil))
 	if _, err := p.Usage(context.Background()); err == nil {
 		t.Fatal("esperaba error con JSON truncado")
+	}
+}
+
+func TestClaudeUsageNullEsFalloAunqueStatusSeaOk(t *testing.T) {
+	p := NewClaudeProvider(fakeRunner(cargarFixture(t, "../../testdata/cswap_list.json"), nil))
+	accs, _ := p.Usage(context.Background())
+	c := accs[2]
+	if c.ID != "3" {
+		t.Fatalf("tercera cuenta debe ser ID=3, obtuve %q", c.ID)
+	}
+	if c.Status != StatusFetchFailed {
+		t.Errorf("usage: null debe producir StatusFetchFailed aun con usageStatus: ok, obtuve %v", c.Status)
+	}
+	if c.ShowsPct() {
+		t.Error("StatusFetchFailed nunca muestra porcentaje")
 	}
 }

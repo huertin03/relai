@@ -30,6 +30,17 @@
       "usageStatus": "token_expired",
       "usage": null,
       "disabled": true
+    },
+    {
+      "number": 3,
+      "email": "tres@example.com",
+      "organizationName": "",
+      "organizationUuid": "",
+      "isOrganization": false,
+      "active": true,
+      "usageStatus": "ok",
+      "usage": null,
+      "disabled": false
     }
   ]
 }
