@@ -173,7 +173,42 @@ Extraído de `codex app-server generate-json-schema --out <dir>` con la 0.145.0.
 }
 ```
 
-Mapeo a `Window`: `Pct` ← `usedPercent` (misma semántica de "consumido" que `cswap`), `ResetsAt` ← `resetsAt`, `Kind` ← derivado de `windowDurationMins` (300 → `"5h"`, 10080 → `"7d"`). `primary` y `secondary` producen dos entradas en `Account.Windows`, igual que `fiveHour`/`sevenDay` en Claude.
+Mapeo a `Window`: `Pct` ← `usedPercent`, `ResetsAt` ← `resetsAt`, `Kind` ← derivado de `windowDurationMins`. `primary` y `secondary` producen dos entradas en `Account.Windows`.
+
+### Respuesta real del app-server (fixture)
+
+Capturada el 2026-07-27 contra `codex app-server` 0.145.0 con sesión activa. Guardada en `testdata/codex_ratelimits.json`.
+
+**Secuencia de handshake, verificada:** JSON por líneas sobre stdio, **sin campo `jsonrpc`** — no es JSON-RPC 2.0 estricto.
+
+```jsonc
+→ {"id":1,"method":"initialize","params":{"clientInfo":{"name":"relai","version":"0.1.0"}}}
+← {"id":1,"result":{"userAgent":"...","codexHome":"...","platformFamily":"unix","platformOs":"macos"}}
+→ {"method":"initialized","params":null}                      // notificación, sin id
+→ {"id":2,"method":"account/rateLimits/read","params":null}    // nótese `account` en minúscula
+← {"id":2,"result":{ ... }}
+```
+
+Respuesta real:
+
+```json
+{"id":2,"result":{
+  "rateLimits":{
+    "limitId":"codex","limitName":null,
+    "primary":{"usedPercent":0,"windowDurationMins":43200,"resetsAt":1787749472},
+    "secondary":null,
+    "credits":{"hasCredits":false,"unlimited":false,"balance":null},
+    "individualLimit":null,"spendControlReached":false,
+    "planType":"free","rateLimitReachedType":null},
+  "rateLimitsByLimitId":{"codex":{ "...igual que rateLimits..." }},
+  "rateLimitResetCredits":{"availableCount":0,"credits":[]}}}
+```
+
+Tres correcciones al diseño que salieron de ejecutarlo de verdad:
+
+1. **Llegan notificaciones no solicitadas intercaladas.** En la captura apareció `remoteControl/status/changed` entre la respuesta al `initialize` y la del `read`. `codex.go` debe leer líneas en bucle y **casar por `id`**, descartando lo que no lo tenga. Un cliente que asuma "la siguiente línea es mi respuesta" fallará de forma intermitente.
+2. **`windowDurationMins` no se limita a 300/10080.** La captura trae `43200` (30 días). El mapeo a `Kind` debe ser general: 300 → `"5h"`, 10080 → `"7d"`, 43200 → `"30d"`, y cualquier otro valor → formateo genérico a partir de los minutos. Nada de un `switch` cerrado.
+3. **`planType` determina si hay cuota que enseñar.** En la captura vale `"free"`: una única ventana mensual al 0%. Relai debe mostrar `planType` en el menú, porque un 0% permanente en plan gratuito significa "aquí no hay nada a lo que saltar", no "tienes cuota de sobra".
 
 **Implicación de diseño:** como Codex ofrece notificación push, `codex.go` puede mantener una conexión al app-server y actualizar al vuelo, dejando el ticker de 3 min como respaldo. Se decidirá en el plan de implementación; el diseño del ticker sigue siendo válido para ambos casos.
 
