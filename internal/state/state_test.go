@@ -146,3 +146,65 @@ func TestLoadNoDisparaAvisos(t *testing.T) {
 		t.Fatalf("cargar el cache no debe avisar, obtuve %v", got)
 	}
 }
+
+// A partir de aquí: tests añadidos más allá de la lista exacta del brief,
+// para cerrar huecos que la verificación por mutación dejó al descubierto.
+
+func TestAvisaExactamenteEnElUmbral(t *testing.T) {
+	// El umbral es inclusivo: llegar exactamente a él ya cuenta como cruce,
+	// no hace falta superarlo. Sin este test, `pct >= threshold` podía
+	// mutarse a `pct > threshold` sin que ningún test lo notara.
+	s := New(85)
+	s.Update("claude", []providers.Account{cuenta("a", 85, providers.StatusOK)}, nil)
+	if got := s.PendingAlerts(); len(got) != 1 {
+		t.Fatalf("pct igual al umbral debe avisar (umbral inclusive), obtuve %v", got)
+	}
+}
+
+func TestUpdateLimpiaElErrorTrasUnRefrescoOK(t *testing.T) {
+	// Un refresco correcto debe borrar el error de un ciclo anterior; si no,
+	// la bandeja seguiría enseñando un fallo ya resuelto.
+	s := New(85)
+	s.Update("claude", nil, errors.New("boom"))
+	s.Update("claude", []providers.Account{cuenta("a", 40, providers.StatusOK)}, nil)
+	snap := s.Snapshot()
+	if _, existe := snap.Errors["claude"]; existe {
+		t.Fatalf("el error debe limpiarse tras un refresco correcto, obtuve %v", snap.Errors["claude"])
+	}
+}
+
+func TestSnapshotEsCopiaIndependiente(t *testing.T) {
+	// Snapshot existe para que la bandeja pinte sin mantener el mutex
+	// cogido; si compartiera el slice con el estado interno, escribir sobre
+	// el snapshot corrompería (sin mutex) los datos que el ticker sigue
+	// actualizando.
+	s := New(85)
+	s.Update("claude", []providers.Account{cuenta("a", 40, providers.StatusOK)}, nil)
+	snap := s.Snapshot()
+	snap.ByProvider["claude"][0] = cuenta("hackeada", 999, providers.StatusOK)
+	pct, _ := s.WorstPct()
+	if pct != 40 {
+		t.Fatalf("mutar el snapshot no debe afectar al estado interno, obtuve %d", pct)
+	}
+}
+
+func TestSaveEsAtomica(t *testing.T) {
+	// Save debe escribir en un temporal y renombrarlo sobre el destino, no
+	// escribir directamente: un corte de luz a mitad de una escritura directa
+	// deja el cache truncado. Se prepara basura en la ruta ".tmp" de antes:
+	// una escritura directa la ignoraría y la dejaría intacta; la escritura
+	// atómica la sobreescribe y luego la hace desaparecer al renombrarla.
+	ruta := filepath.Join(t.TempDir(), "state.json")
+	tmpRuta := ruta + ".tmp"
+	if err := os.WriteFile(tmpRuta, []byte("basura"), 0o600); err != nil {
+		t.Fatalf("no se pudo preparar el temporal previo: %v", err)
+	}
+	s := New(85)
+	s.Update("claude", []providers.Account{cuenta("a", 50, providers.StatusOK)}, nil)
+	if err := s.Save(ruta); err != nil {
+		t.Fatalf("Save falló: %v", err)
+	}
+	if _, err := os.Stat(tmpRuta); !os.IsNotExist(err) {
+		t.Fatalf("Save debe renombrar el temporal sobre el destino; %s no debería sobrevivir (err=%v)", tmpRuta, err)
+	}
+}
