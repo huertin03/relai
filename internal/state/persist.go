@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/huertin03/relai/internal/providers"
 )
@@ -12,13 +13,25 @@ type discoState struct {
 	Accounts map[string][]providers.Account `json:"accounts"`
 }
 
-// CachePath devuelve la ruta del cache en disco.
+// CachePath devuelve la ruta del cache: $XDG_CACHE_HOME/relai/state.json, o
+// ~/.cache/relai/state.json. Misma razón que en config.DefaultPath: la
+// documentación promete ~/.cache y os.UserCacheDir() no lo cumple en macOS.
 func CachePath() (string, error) {
-	dir, err := os.UserCacheDir()
+	if dir := os.Getenv("XDG_CACHE_HOME"); dir != "" {
+		return filepath.Join(dir, "relai", "state.json"), nil
+	}
+	if runtime.GOOS == "windows" {
+		dir, err := os.UserCacheDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(dir, "relai", "state.json"), nil
+	}
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "relai", "state.json"), nil
+	return filepath.Join(home, ".cache", "relai", "state.json"), nil
 }
 
 // Save vuelca las cuentas conocidas. Escritura atómica: un corte a mitad no

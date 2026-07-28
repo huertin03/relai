@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -42,13 +43,30 @@ func Default() Config {
 	}
 }
 
-// DefaultPath devuelve la ruta canónica del fichero de configuración.
+// DefaultPath devuelve la ruta canónica del fichero de configuración:
+// $XDG_CONFIG_HOME/relai/config.yml, o ~/.config/relai/config.yml.
+//
+// Deliberadamente NO se usa os.UserConfigDir(): en macOS devuelve
+// ~/Library/Application Support, mientras que toda la documentación de Relai
+// promete ~/.config. Esa discrepancia dejó la configuración del usuario sin
+// leer y silenciosamente sin efecto, que es el peor fallo posible en algo que
+// solo existe para ser configurado. En Windows sí se delega en el sistema.
 func DefaultPath() (string, error) {
-	dir, err := os.UserConfigDir()
+	if dir := os.Getenv("XDG_CONFIG_HOME"); dir != "" {
+		return filepath.Join(dir, "relai", "config.yml"), nil
+	}
+	if runtime.GOOS == "windows" {
+		dir, err := os.UserConfigDir()
+		if err != nil {
+			return "", err
+		}
+		return filepath.Join(dir, "relai", "config.yml"), nil
+	}
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "relai", "config.yml"), nil
+	return filepath.Join(home, ".config", "relai", "config.yml"), nil
 }
 
 // Load parte de los defaults y sobreescribe solo lo presente en el fichero.
