@@ -11,13 +11,37 @@
       "active": true,
       "usageStatus": "ok",
       "usage": {
-        "fiveHour": { "pct": 78, "resetsAt": 1787749472, "countdown": "2h14", "clock": "18:30" },
-        "sevenDay": { "pct": 41, "resetsAt": 1788049472, "expectedPct": 38.2, "aheadOfPace": true },
-        "spend": { "used": 12.5, "limit": 50.0, "pct": 25, "currency": "USD" },
-        "scoped": [ { "name": "opus", "pct": 62, "resetsAt": 1788049472 } ]
+        "fiveHour": {
+          "pct": 78.0,
+          "resetsAt": "2026-07-28T11:19:59.253163+00:00",
+          "countdown": "2h 14m",
+          "clock": "13:19"
+        },
+        "sevenDay": {
+          "pct": 41.0,
+          "resetsAt": "2026-08-02T10:00:00.253187+00:00",
+          "countdown": "5d 2h",
+          "clock": "Aug 2 12:00",
+          "expectedPct": 38.2,
+          "aheadOfPace": true,
+          "projectedExhaustionAt": "2026-08-01T07:57:42Z",
+          "willLastToReset": false
+        },
+        "spend": {
+          "used": 12.5,
+          "limit": 50.0,
+          "pct": 25.0,
+          "currency": "USD"
+        },
+        "scoped": [
+          {
+            "pct": 62.0,
+            "name": "opus"
+          }
+        ]
       },
       "alias": "work",
-      "usageFetchedAt": "2026-07-27T09:00:00Z",
+      "usageFetchedAt": "2026-07-28T07:25:40Z",
       "usageAgeSeconds": 42.0
     },
     {
@@ -37,10 +61,9 @@
       "organizationName": "",
       "organizationUuid": "",
       "isOrganization": false,
-      "active": true,
+      "active": false,
       "usageStatus": "ok",
-      "usage": null,
-      "disabled": false
+      "usage": null
     }
   ]
 }

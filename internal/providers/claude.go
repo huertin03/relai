@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 )
@@ -13,10 +14,17 @@ import (
 // detectable: preferimos fallar visiblemente a inventar números.
 const claudeSchemaVersion = 1
 
+// cswapWindow refleja la forma REAL de la salida de cswap 0.23.0, capturada
+// de una ejecución con cuentas registradas. Dos tipos importan y no son los
+// que sugiere leer el código fuente de cswap:
+//   - `pct` llega como FLOAT ("pct": 25.0), no como entero. Con `int` fallaba
+//     el Unmarshal del envelope ENTERO, no solo de esa ventana, así que el
+//     proveedor no devolvía nada en absoluto.
+//   - `resetsAt` llega como cadena ISO 8601 con offset, no como epoch.
 type cswapWindow struct {
-	Pct      int    `json:"pct"`
-	ResetsAt *int64 `json:"resetsAt"`
-	Name     string `json:"name"`
+	Pct      float64 `json:"pct"`
+	ResetsAt string  `json:"resetsAt"`
+	Name     string  `json:"name"`
 }
 
 type cswapUsage struct {
@@ -107,9 +115,11 @@ func toWindows(u *cswapUsage) []Window {
 		if cw == nil {
 			return
 		}
-		w := Window{Kind: kind, Pct: cw.Pct, Name: cw.Name}
-		if cw.ResetsAt != nil {
-			w.ResetsAt = time.Unix(*cw.ResetsAt, 0)
+		// Se redondea en vez de truncar: un 24,6% consumido está más cerca
+		// de 25 que de 24, y el umbral de aviso compara contra este entero.
+		w := Window{Kind: kind, Pct: int(math.Round(cw.Pct)), Name: cw.Name}
+		if t, err := time.Parse(time.RFC3339, cw.ResetsAt); err == nil {
+			w.ResetsAt = t
 		}
 		ws = append(ws, w)
 	}
