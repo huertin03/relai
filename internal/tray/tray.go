@@ -20,12 +20,6 @@ import (
 
 const subprocessTimeout = 10 * time.Second
 
-// maxAccountSlots es cuántos ítems de cuenta se reservan por proveedor.
-// systray no permite insertar ni reordenar ítems tras crearse, así que el
-// número de slots queda fijo desde el arranque; una cuenta de más se
-// recorta en vez de reventar el menú.
-const maxAccountSlots = 8
-
 // acctSlot es un hueco reservado para una cuenta dentro del menú de un
 // proveedor. id/switchable describen qué cuenta representa el slot AHORA
 // MISMO: los escribe el goroutine de refresco en cada repintado y los lee
@@ -61,14 +55,25 @@ func (s *acctSlot) account() (id string, switchable bool) {
 
 // providerMenu son los ítems persistentes de un proveedor: se crean una
 // sola vez en buildMenu y repaint solo les cambia texto y visibilidad.
+// providerMenu son los ítems de un proveedor. El proveedor es un submenú:
+// sus cuentas cuelgan de él, así que crearlas tarde no las manda al final del
+// menú principal. Los hijos se crean PEREZOSAMENTE y ya con su texto puesto:
+// en el backend de macOS un ítem creado con Hide() no reaparece nunca con
+// Show(), así que la regla es no crear nada oculto.
 type providerMenu struct {
-	name    string
-	header  *systray.MenuItem
-	errItem *systray.MenuItem
-	// errVisible sigue la misma regla que acctSlot.visible: solo lo toca
-	// repaint, sin mutex propio.
+	name   string
+	parent *systray.MenuItem
+
+	errItem    *systray.MenuItem
 	errVisible bool
-	slots      []*acctSlot
+
+	// emptyItem explica que el proveedor no tiene cuentas. Sin él, un
+	// submenú vacío no distingue "no hay nada configurado" de "está roto",
+	// que es justo la confusión que hace inútil la bandeja.
+	emptyItem    *systray.MenuItem
+	emptyVisible bool
+
+	slots []*acctSlot
 }
 
 type app struct {
@@ -147,6 +152,7 @@ func Run(cfg config.Config) error {
 }
 
 func (a *app) onReady() {
+	systray.SetTemplateIcon(gaugeIcon(0, false), gaugeIcon(0, false))
 	systray.SetTitle("—")
 	systray.SetTooltip("Relai")
 	a.buildMenu()
@@ -210,52 +216,91 @@ func (a *app) repaint() {
 
 	snap := a.st.Snapshot()
 	systray.SetTitle(a.st.Title())
+	// El icono repite el peor porcentaje en forma de depósito: de un vistazo,
+	// sin leer el número. Sin medición se dibuja vacío con una diagonal.
+	pct, ok := a.st.WorstPct()
+	icon := gaugeIcon(pct, ok)
+	systray.SetTemplateIcon(icon, icon)
 	for _, pm := range a.menus {
-		paintProvider(pm, snap.ByProvider[pm.name], snap.Errors[pm.name])
+		a.paintProvider(pm, snap.ByProvider[pm.name], snap.Errors[pm.name])
 	}
 }
 
-// paintProvider actualiza los ítems de un proveedor. Se invoca siempre desde
-// dentro de repaint(), con repaintMu ya cogido.
-func paintProvider(pm *providerMenu, accs []providers.Account, provErr error) {
+// paintProvider actualiza los ítems de un proveedor, creando los que falten.
+// Se invoca siempre desde repaint(), con repaintMu ya cogido, así que la
+// creación perezosa está serializada.
+//
+// Por qué perezosa y no reservando slots por adelantado: en el backend de
+// macOS de systray un MenuItem creado y ocultado con Hide() no vuelve a
+// aparecer al llamar a Show(). Reservar ocho slots ocultos dejaba el menú
+// permanentemente vacío aunque el estado tuviera cuentas — verificado con
+// trazas: repaint() recibía la cuenta y llamaba a Show() sin efecto alguno.
+// La regla, por tanto, es que ningún ítem nace oculto.
+func (a *app) paintProvider(pm *providerMenu, accs []providers.Account, provErr error) {
 	if provErr != nil {
 		// ErrBinaryMissing distingue "no está instalado" de "falló": la
 		// bandeja debe ofrecer un mensaje accionable en el primer caso, no
 		// solo repetir el error crudo del segundo.
 		title := "sin datos: " + provErr.Error()
 		if errors.Is(provErr, providers.ErrBinaryMissing) {
-			title = "la herramienta no está instalada"
+			title = pm.name + ": la herramienta no está instalada"
 		}
-		pm.errItem.SetTitle(title)
-		pm.errItem.SetTooltip(provErr.Error())
-		if !pm.errVisible {
+		if pm.errItem == nil {
+			pm.errItem = pm.parent.AddSubMenuItem(title, provErr.Error())
+			pm.errItem.Disable()
 			pm.errVisible = true
-			pm.errItem.Show()
+		} else {
+			pm.errItem.SetTitle(title)
+			pm.errItem.SetTooltip(provErr.Error())
+			if !pm.errVisible {
+				pm.errVisible = true
+				pm.errItem.Show()
+			}
 		}
-	} else if pm.errVisible {
+	} else if pm.errItem != nil && pm.errVisible {
 		pm.errVisible = false
 		pm.errItem.Hide()
 	}
 
-	shown := len(accs)
-	if shown > len(pm.slots) {
-		shown = len(pm.slots) // más cuentas que slots reservados: se recortan, no revienta
-	}
-	for i, slot := range pm.slots {
-		if i >= shown {
-			slot.setAccount("", false)
-			if slot.visible {
-				slot.visible = false
-				slot.item.Hide()
-			}
-			continue
+	// Sin cuentas y sin error: decirlo explícitamente. Un submenú vacío no
+	// distingue "no hay nada configurado" de "está roto".
+	if len(accs) == 0 && provErr == nil {
+		msg := pm.name + ": sin cuentas registradas"
+		if pm.name == "claude" {
+			msg = "sin cuentas · regístralas con: cswap add"
 		}
-		acc := accs[i]
+		if pm.emptyItem == nil {
+			pm.emptyItem = pm.parent.AddSubMenuItem(msg, "Relai no tiene nada que mostrar para este proveedor")
+			pm.emptyItem.Disable()
+			pm.emptyVisible = true
+		} else if !pm.emptyVisible {
+			pm.emptyVisible = true
+			pm.emptyItem.Show()
+		}
+	} else if pm.emptyItem != nil && pm.emptyVisible {
+		pm.emptyVisible = false
+		pm.emptyItem.Hide()
+	}
+
+	for i, acc := range accs {
 		// Codex es solo lectura: no hay equivalente a cswap para cambiar de
 		// cuenta, así que sus ítems nunca se ofrecen como accionables.
 		clickable := acc.Status == providers.StatusOK && pm.name != "codex"
-		slot.setAccount(acc.ID, clickable)
 
+		if i == len(pm.slots) {
+			item := pm.parent.AddSubMenuItem(etiqueta(acc), acc.Email)
+			slot := &acctSlot{item: item, visible: true}
+			slot.setAccount(acc.ID, clickable)
+			pm.slots = append(pm.slots, slot)
+			go a.watchAccountClick(slot)
+			if !clickable {
+				item.Disable()
+			}
+			continue
+		}
+
+		slot := pm.slots[i]
+		slot.setAccount(acc.ID, clickable)
 		slot.item.SetTitle(etiqueta(acc))
 		slot.item.SetTooltip(acc.Email)
 		if clickable {
@@ -266,6 +311,17 @@ func paintProvider(pm *providerMenu, accs []providers.Account, provErr error) {
 		if !slot.visible {
 			slot.visible = true
 			slot.item.Show()
+		}
+	}
+
+	// Sobrantes de un refresco anterior: ocultarlos es seguro porque ya
+	// estuvieron visibles al menos una vez.
+	for i := len(accs); i < len(pm.slots); i++ {
+		slot := pm.slots[i]
+		slot.setAccount("", false)
+		if slot.visible {
+			slot.visible = false
+			slot.item.Hide()
 		}
 	}
 }
@@ -282,33 +338,9 @@ func (a *app) buildMenu() {
 	// y el usuario decide qué proveedor ve primero.
 	for _, name := range a.cfg.Providers {
 		pm := &providerMenu{name: name}
-		pm.header = systray.AddMenuItem(name, "")
-		pm.header.Disable()
-
-		pm.errItem = systray.AddMenuItem("", "")
-		pm.errItem.Disable()
-		pm.errItem.Hide()
-
-		for i := 0; i < maxAccountSlots; i++ {
-			item := systray.AddMenuItem("", "")
-			item.Hide()
-			slot := &acctSlot{item: item}
-			pm.slots = append(pm.slots, slot)
-			go a.watchAccountClick(slot)
-		}
+		pm.parent = systray.AddMenuItem(name, "")
 		a.menus = append(a.menus, pm)
 	}
-
-	systray.AddSeparator()
-	a.buildHandoffMenu()
-
-	systray.AddSeparator()
-	quit := systray.AddMenuItem("Salir", "")
-	go func() {
-		<-quit.ClickedCh
-		close(a.quitCh)
-		systray.Quit()
-	}()
 }
 
 // watchAccountClick es el único goroutine de ClickedCh de este slot, creado
